@@ -88,8 +88,8 @@ enum Theme {
     static let line = UIColor(red: 0x27 / 255, green: 0x2C / 255, blue: 0x37 / 255, alpha: 1)
     static let text = UIColor(red: 0xE8 / 255, green: 0xEA / 255, blue: 0xEE / 255, alpha: 1)
     static let muted = UIColor(red: 0xA3 / 255, green: 0xAB / 255, blue: 0xB9 / 255, alpha: 1)
-    static let accent = UIColor(red: 0x54 / 255, green: 0x58 / 255, blue: 0xF2 / 255, alpha: 1)  // chàm BexBusiness
-    static let accentText = UIColor(red: 0x9C / 255, green: 0x9E / 255, blue: 0xFF / 255, alpha: 1)  // chữ nhấn trên nền tối
+    static let accent = UIColor(red: 0x0F / 255, green: 0x7B / 255, blue: 0x7A / 255, alpha: 1)  // xanh cổ vịt BexBusiness
+    static let accentText = UIColor(red: 0x5C / 255, green: 0xCF / 255, blue: 0xC6 / 255, alpha: 1)  // chữ nhấn trên nền tối
     static let bad = UIColor(red: 0xFF / 255, green: 0x70 / 255, blue: 0x70 / 255, alpha: 1)
 
     /// Giao diện sáng/tối trang web chọn lần trước, nhớ lại để lúc mở app không bị nháy màu
