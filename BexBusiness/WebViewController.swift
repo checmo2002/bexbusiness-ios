@@ -7,7 +7,13 @@ import QuickLook
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
                                 WKScriptMessageHandlerWithReply, WKDownloadDelegate, QLPreviewControllerDataSource {
     private let base: URL
-    private var web: WKWebView!
+    var web: WKWebView!
+    // thanh Tab gốc (NativeTabBar.swift)
+    let tabBar = UITabBar()
+    var navState = NavState()
+    var nativeTabsOn = false
+    var webBottomToView: NSLayoutConstraint!
+    var webBottomToTabBar: NSLayoutConstraint!
     private let errorView = UIView()
     private let errorDetail = UILabel()
     private let loadingView = UIActivityIndicatorView(style: .large)
@@ -45,6 +51,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.notificationShim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.lockZoom, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: NativeTabs.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
@@ -65,12 +72,16 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if #available(iOS 16.4, *) { web.isInspectable = true }
         web.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(web)
-        // phía trên chừa thanh trạng thái / tai thỏ; phía dưới tràn tới mép, trang web tự chừa vạch Home (safe-area)
+        buildTabBar()
+        // phía trên chừa thanh trạng thái / tai thỏ; phía dưới tràn tới mép, trang web tự chừa vạch Home (safe-area).
+        // Khi dùng thanh Tab gốc thì trang dừng ở mép trên thanh Tab.
+        webBottomToView = web.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        webBottomToTabBar = web.bottomAnchor.constraint(equalTo: tabBar.topAnchor)
         NSLayoutConstraint.activate([
             web.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             web.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             web.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            web.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            webBottomToView,
         ])
 
         loadingView.color = Theme.muted
@@ -100,6 +111,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         Theme.apply(to: view.window)
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateTabBar() // xoay máy / đổi cỡ cửa sổ iPad: bật tắt thanh Tab gốc theo bề ngang
     }
 
     static var deviceKind: String {
@@ -253,6 +269,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             setNeedsStatusBarAppearanceUpdate()
         case "changeServer":
             changeServer()
+        case "nav":
+            navState = NavState(body)
+            updateTabBar(syncPage: true)
         case "preview":
             // trang web nhờ app mở tệp bằng trình xem tài liệu: {type:'preview', url}
             if let s = body["url"] as? String, let u = URL(string: s, relativeTo: web.url ?? base)?.absoluteURL, isOwn(u) { openPreview(u) }

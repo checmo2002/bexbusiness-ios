@@ -11,6 +11,7 @@
 		A10000000000000000000022 /* SetupViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* SetupViewController.swift */; };
 		A10000000000000000000023 /* QRScannerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* QRScannerViewController.swift */; };
 		A10000000000000000000024 /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000014 /* WebViewController.swift */; };
+		A10000000000000000000026 /* NativeTabBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* NativeTabBar.swift */; };
 		A10000000000000000000025 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000015 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -20,6 +21,7 @@
 		A10000000000000000000012 /* SetupViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* QRScannerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScannerViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000014 /* WebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewController.swift; sourceTree = "<group>"; };
+		A10000000000000000000018 /* NativeTabBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeTabBar.swift; sourceTree = "<group>"; };
 		A10000000000000000000015 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A10000000000000000000016 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000017 /* BexBusiness.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = BexBusiness.entitlements; sourceTree = "<group>"; };
@@ -59,6 +61,7 @@
 				A10000000000000000000012 /* SetupViewController.swift */,
 				A10000000000000000000013 /* QRScannerViewController.swift */,
 				A10000000000000000000014 /* WebViewController.swift */,
+				A10000000000000000000018 /* NativeTabBar.swift */,
 				A10000000000000000000015 /* Assets.xcassets */,
 				A10000000000000000000016 /* Info.plist */,
 				A10000000000000000000017 /* BexBusiness.entitlements */,
@@ -140,6 +143,7 @@
 				A10000000000000000000022 /* SetupViewController.swift in Sources */,
 				A10000000000000000000023 /* QRScannerViewController.swift in Sources */,
 				A10000000000000000000024 /* WebViewController.swift in Sources */,
+				A10000000000000000000026 /* NativeTabBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
