@@ -20,10 +20,40 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
-	<key>LSRequiresIPhoneOS</key>
-	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>BexBusiness dùng camera để quét mã QR kết nối máy chủ, đăng nhập trên máy tính, chấm công và để bật hình trong phòng họp.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>BexBusiness dùng micro để bạn nói chuyện trong phòng họp và cuộc gọi.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>BexBusiness lưu ảnh và tệp bạn tải về vào thư viện ảnh.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>BexBusiness cần truy cập ảnh để bạn gửi ảnh trong tin nhắn và đổi ảnh đại diện.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
@@ -31,8 +61,6 @@
 	</dict>
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleLightContent</string>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<true/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -44,18 +72,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>NSCameraUsageDescription</key>
-	<string>BexBusiness dùng camera để quét mã QR kết nối máy chủ, đăng nhập trên máy tính, chấm công và để bật hình trong phòng họp.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>BexBusiness dùng micro để bạn nói chuyện trong phòng họp và cuộc gọi.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>BexBusiness cần truy cập ảnh để bạn gửi ảnh trong tin nhắn và đổi ảnh đại diện.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>BexBusiness lưu ảnh và tệp bạn tải về vào thư viện ảnh.</string>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
 </dict>
 </plist>

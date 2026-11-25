@@ -5,17 +5,31 @@ import UIKit
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
-    var window: UIWindow?
-
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        let w = UIWindow(frame: UIScreen.main.bounds)
+        return true
+    }
+
+    func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+        let c = UISceneConfiguration(name: "Default", sessionRole: connectingSceneSession.role)
+        c.delegateClass = SceneDelegate.self
+        return c
+    }
+}
+
+/// iOS mới bắt buộc dùng vòng đời UIScene (app không có scene sẽ bị dừng ngay khi mở)
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let windowScene = scene as? UIWindowScene else { return }
+        let w = UIWindow(windowScene: windowScene)
         w.backgroundColor = Theme.bg
         w.overrideUserInterfaceStyle = .dark
         w.rootViewController = AppRouter.initialController()
         w.makeKeyAndVisible()
         window = w
-        return true
     }
 }
 
@@ -86,7 +100,8 @@ enum AppRouter {
     }
 
     static func show(_ vc: UIViewController) {
-        guard let w = (UIApplication.shared.delegate as? AppDelegate)?.window else { return }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0.delegate as? SceneDelegate }
+        guard let w = scenes.first?.window else { return }
         UIView.transition(with: w, duration: 0.25, options: .transitionCrossDissolve, animations: {
             w.rootViewController = vc
         })
