@@ -36,6 +36,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         close.backgroundColor = UIColor.white.withAlphaComponent(0.18)
         close.layer.cornerRadius = 12
         close.translatesAutoresizingMaskIntoConstraints = false
+        keepCustomLook(close)
         close.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
 
         let frame = UIView()
@@ -76,6 +77,29 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         preview?.frame = view.bounds
+        rotatePreview()
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: nil) { _ in self.rotatePreview() }
+    }
+
+    /// iPad xoay ngang: quay hình camera theo chiều màn hình
+    private func rotatePreview() {
+        guard let conn = preview?.connection, let o = view.window?.windowScene?.interfaceOrientation else { return }
+        if #available(iOS 17.0, *) {
+            let angles: [UIInterfaceOrientation: CGFloat] = [.portrait: 90, .landscapeRight: 0, .portraitUpsideDown: 270, .landscapeLeft: 180]
+            let a = angles[o] ?? 90
+            if conn.isVideoRotationAngleSupported(a) { conn.videoRotationAngle = a }
+        } else if conn.isVideoOrientationSupported {
+            switch o {
+            case .landscapeLeft: conn.videoOrientation = .landscapeLeft
+            case .landscapeRight: conn.videoOrientation = .landscapeRight
+            case .portraitUpsideDown: conn.videoOrientation = .portraitUpsideDown
+            default: conn.videoOrientation = .portrait
+            }
+        }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -106,6 +130,7 @@ final class QRScannerViewController: UIViewController, AVCaptureMetadataOutputOb
         layer.frame = view.bounds
         view.layer.insertSublayer(layer, at: 0)
         preview = layer
+        rotatePreview()
 
         let s = session
         DispatchQueue.global(qos: .userInitiated).async { s.startRunning() }

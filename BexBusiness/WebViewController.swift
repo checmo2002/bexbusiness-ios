@@ -3,14 +3,15 @@ import WebKit
 import UserNotifications
 
 /// Màn hình chính: giao diện web của máy chủ BexBusiness trong WKWebView.
-final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler, WKDownloadDelegate {
+final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
+                                WKScriptMessageHandlerWithReply, WKDownloadDelegate {
     private let base: URL
     private var web: WKWebView!
     private let errorView = UIView()
     private let errorDetail = UILabel()
     private let loadingView = UIActivityIndicatorView(style: .large)
     private var titleObservation: NSKeyValueObservation?
-    private var lightTheme = false
+    private var lightTheme = Theme.webLight
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
     private var loadedOnce = false
 
@@ -30,13 +31,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Theme.bg
+        view.backgroundColor = Theme.webBg
 
         let ucc = WKUserContentController()
         ucc.add(WeakScriptHandler(self), name: "bex")
+        ucc.addScriptMessageHandler(WeakReplyHandler(self), contentWorld: .page, name: "bexNotify")
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-        let js = "window.bexMobile = Object.freeze({ platform: 'ios', app: 'ios', version: '\(version)' });"
+        let js = "window.bexMobile = Object.freeze({ platform: 'ios', app: 'ios', device: '\(Self.deviceKind)', version: '\(version)' });"
         ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.notificationShim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
 
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
@@ -49,8 +52,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         web.navigationDelegate = self
         web.uiDelegate = self
         web.isOpaque = false
-        web.backgroundColor = Theme.bg
-        web.scrollView.backgroundColor = Theme.bg
+        web.backgroundColor = Theme.webBg
+        web.scrollView.backgroundColor = Theme.webBg
+        web.pageZoom = Self.savedZoom
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.scrollView.bounces = false
         web.allowsLinkPreview = false
@@ -80,11 +84,26 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             DispatchQueue.main.async { self?.updateBadge(from: wv.title) }
         }
         NotificationCenter.default.addObserver(self, selector: #selector(appBecameActive), name: UIApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(notificationClicked(_:)), name: .bexNotificationClicked, object: nil)
 
         loadingView.startAnimating()
         web.load(URLRequest(url: base))
-        // xin quyền hiện số tin chưa đọc trên biểu tượng app (hỏi khi đã vào máy chủ, không hỏi ngay lúc mở app)
-        UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
+        // xin quyền thông báo + số tin chưa đọc trên biểu tượng app (hỏi khi đã vào máy chủ, không hỏi ngay lúc mở app).
+        // Hỏi đủ cả 3 trong một lần: iOS/macOS chỉ hiện hộp hỏi một lần duy nhất.
+        UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .alert, .sound]) { _, _ in }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        Theme.apply(to: view.window)
+    }
+
+    static var deviceKind: String {
+        #if targetEnvironment(macCatalyst)
+        return "mac"
+        #else
+        return UIDevice.current.userInterfaceIdiom == .pad ? "ipad" : "iphone"
+        #endif
     }
 
     // MARK: - Màn hình lỗi kết nối
@@ -117,6 +136,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         retry.setTitleColor(.white, for: .normal)
         retry.layer.cornerRadius = 12
         retry.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        keepCustomLook(retry)
         retry.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
 
         let change = UIButton(type: .system)
@@ -128,6 +148,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         change.layer.borderWidth = 1
         change.layer.borderColor = Theme.line.cgColor
         change.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        keepCustomLook(change)
         change.addTarget(self, action: #selector(changeServer), for: .touchUpInside)
 
         let stack = UIStackView(arrangedSubviews: [icon, title, errorDetail, retry, change])
@@ -143,9 +164,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             errorView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             errorView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             stack.centerYAnchor.constraint(equalTo: errorView.centerYAnchor),
-            stack.leadingAnchor.constraint(equalTo: errorView.safeAreaLayoutGuide.leadingAnchor, constant: 28),
-            stack.trailingAnchor.constraint(equalTo: errorView.safeAreaLayoutGuide.trailingAnchor, constant: -28),
         ])
+        pinReadableWidth(stack, in: errorView.safeAreaLayoutGuide, margin: 28)
     }
 
     private func showError(_ error: Error) {
@@ -161,7 +181,36 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     }
 
     @objc private func changeServer() {
-        AppRouter.show(SetupViewController(prefill: base))
+        AppRouter.show(SetupViewController(prefill: base), from: self)
+    }
+
+    // MARK: - Lệnh menu / phím tắt (khai báo trong AppDelegate.buildMenu)
+
+    @objc func changeServerCommand() { changeServer() }
+
+    @objc func reloadPage() {
+        errorView.isHidden = true
+        if web.url == nil || !loadedOnce { web.load(URLRequest(url: base)) } else { web.reload() }
+    }
+
+    private static var savedZoom: CGFloat {
+        get { let z = UserDefaults.standard.double(forKey: "bex.zoom"); return z > 0 ? CGFloat(z) : 1 }
+        set { UserDefaults.standard.set(Double(newValue), forKey: "bex.zoom") }
+    }
+
+    private func setZoom(_ z: CGFloat) {
+        let v = min(2, max(0.5, (z * 10).rounded() / 10))
+        web.pageZoom = v
+        Self.savedZoom = v
+    }
+
+    @objc func zoomIn() { setZoom(web.pageZoom + 0.1) }
+    @objc func zoomOut() { setZoom(web.pageZoom - 0.1) }
+    @objc func zoomReset() { setZoom(1) }
+
+    /// ⌘+ (bàn phím có phím + riêng) cũng phóng to, giống trình duyệt; không hiện trong menu
+    override var keyCommands: [UIKeyCommand]? {
+        [UIKeyCommand(input: "+", modifierFlags: .command, action: #selector(zoomIn))]
     }
 
     @objc private func appBecameActive() {
@@ -176,6 +225,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if let t = title, t.hasPrefix("("), let close = t.firstIndex(of: ")") {
             n = Int(t[t.index(after: t.startIndex)..<close]) ?? 0
         }
+        // tên cửa sổ trên Mac (menu Cửa sổ, Mission Control) và trình chuyển app trên iPad
+        view.window?.windowScene?.title = title?.isEmpty == false ? title : "BexBusiness"
         if #available(iOS 16.0, *) {
             UNUserNotificationCenter.current().setBadgeCount(n) { _ in }
         } else {
@@ -190,10 +241,12 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         switch type {
         case "theme":
             lightTheme = (body["value"] as? String) == "light"
-            let bg = lightTheme ? Theme.bgLight : Theme.bg
+            Theme.webLight = lightTheme
+            let bg = Theme.webBg
             view.backgroundColor = bg
             web.backgroundColor = bg
             web.scrollView.backgroundColor = bg
+            Theme.apply(to: view.window)
             setNeedsStatusBarAppearanceUpdate()
         case "changeServer":
             changeServer()
@@ -330,10 +383,15 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func downloadDidFinish(_ download: WKDownload) {
         guard let file = downloadFiles.removeValue(forKey: ObjectIdentifier(download)) else { return }
+        #if targetEnvironment(macCatalyst)
+        // Mac: hộp thoại "Lưu" quen thuộc thay cho bảng chia sẻ
+        present(UIDocumentPickerViewController(forExporting: [file], asCopy: true), animated: true)
+        #else
         let share = UIActivityViewController(activityItems: [file], applicationActivities: nil)
         share.popoverPresentationController?.sourceView = view
         share.popoverPresentationController?.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.maxY - 80, width: 1, height: 1)
         present(share, animated: true)
+        #endif
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
@@ -341,6 +399,104 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let a = UIAlertController(title: "Không tải được tệp", message: error.localizedDescription, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
+    }
+}
+
+// MARK: - Thông báo gốc thay cho window.Notification (WKWebView không có sẵn)
+
+extension WebViewController {
+    /// Trang web dùng `new Notification(title, {body, tag})`, `Notification.permission`, `Notification.requestPermission()`.
+    /// Lớp này chuyển sang thông báo của iOS/macOS. Trên Mac app chạy nền nên thông báo đến bình thường;
+    /// trên iPhone/iPad chỉ đến khi app còn mở hoặc vừa ra nền (muốn có khi app đóng cần APNs).
+    static let notificationShim = #"""
+    (function () {
+      var h = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.bexNotify;
+      if (!h) return;
+      var perm = 'default', live = {};
+      function N(title, opts) {
+        opts = opts || {};
+        this.title = String(title == null ? '' : title); this.body = String(opts.body || ''); this.tag = String(opts.tag || '');
+        this.onclick = null; this.onclose = null; this.onshow = null; this.onerror = null;
+        this._id = Math.random().toString(36).slice(2) + Date.now().toString(36);
+        live[this._id] = this;
+        if (perm === 'granted') h.postMessage({ type: 'show', id: this._id, title: this.title, body: this.body, tag: this.tag });
+      }
+      N.prototype.close = function () { delete live[this._id]; h.postMessage({ type: 'close', id: this._id, tag: this.tag }); };
+      N.prototype.addEventListener = function (t, f) { if (t === 'click') this.onclick = f; };
+      N.prototype.removeEventListener = function () {};
+      Object.defineProperty(N, 'permission', { get: function () { return perm; } });
+      N.requestPermission = function (cb) {
+        return h.postMessage({ type: 'request' }).then(function (p) { perm = p || 'denied'; if (cb) cb(perm); return perm; });
+      };
+      N._bexClick = function (id) { var n = live[id]; if (!n) return false; if (typeof n.onclick === 'function') n.onclick({ target: n }); return true; };
+      h.postMessage({ type: 'status' }).then(function (p) { perm = p || 'default'; });
+      Object.defineProperty(window, 'Notification', { value: N, writable: true, configurable: true });
+    })();
+    """#
+
+    private static func permString(_ s: UNAuthorizationStatus) -> String {
+        switch s {
+        case .notDetermined: return "default"
+        case .denied: return "denied"
+        default: return "granted"
+        }
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+        let reply: (Any?) -> Void = { v in DispatchQueue.main.async { replyHandler(v, nil) } }
+        guard let body = message.body as? [String: Any], let type = body["type"] as? String else { return reply(nil) }
+        let center = UNUserNotificationCenter.current()
+        switch type {
+        case "status":
+            center.getNotificationSettings { reply(Self.permString($0.authorizationStatus)) }
+        case "request":
+            center.getNotificationSettings { s in
+                guard s.authorizationStatus == .notDetermined else { return reply(Self.permString(s.authorizationStatus)) }
+                center.requestAuthorization(options: [.alert, .sound, .badge]) { ok, _ in reply(ok ? "granted" : "denied") }
+            }
+        case "show":
+            let id = body["id"] as? String ?? UUID().uuidString
+            let tag = body["tag"] as? String ?? ""
+            let c = UNMutableNotificationContent()
+            c.title = (body["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "BexBusiness"
+            c.body = body["body"] as? String ?? ""
+            c.sound = .default
+            if !tag.isEmpty { c.threadIdentifier = tag }
+            c.userInfo = ["bexId": id, "scene": view.window?.windowScene?.session.persistentIdentifier ?? ""]
+            // cùng tag thì thay thông báo cũ, giống trình duyệt
+            center.add(UNNotificationRequest(identifier: tag.isEmpty ? id : "tag:" + tag, content: c, trigger: nil))
+            reply(true)
+        case "close":
+            let tag = body["tag"] as? String ?? ""
+            let ident = tag.isEmpty ? (body["id"] as? String ?? "") : "tag:" + tag
+            center.removeDeliveredNotifications(withIdentifiers: [ident])
+            reply(true)
+        default:
+            reply(nil)
+        }
+    }
+
+    /// Bấm vào thông báo: đưa đúng cửa sổ lên trước và chạy onclick của trang (mở kênh/tin nhắn)
+    @objc fileprivate func notificationClicked(_ n: Notification) {
+        guard let id = n.userInfo?["bexId"] as? String else { return }
+        let scene = n.userInfo?["scene"] as? String ?? ""
+        if UIApplication.shared.supportsMultipleScenes, let session = view.window?.windowScene?.session,
+           session.persistentIdentifier == scene {
+            UIApplication.shared.requestSceneSessionActivation(session, userActivity: nil, options: nil, errorHandler: nil)
+        }
+        let safe = String(id.filter { $0.isLetter || $0.isNumber })
+        web.evaluateJavaScript("window.Notification && Notification._bexClick ? Notification._bexClick('\(safe)') : false", completionHandler: nil)
+    }
+}
+
+private final class WeakReplyHandler: NSObject, WKScriptMessageHandlerWithReply {
+    weak var target: WKScriptMessageHandlerWithReply?
+    init(_ target: WKScriptMessageHandlerWithReply) { self.target = target }
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage,
+                               replyHandler: @escaping (Any?, String?) -> Void) {
+        if let t = target { t.userContentController(userContentController, didReceive: message, replyHandler: replyHandler) }
+        else { replyHandler(nil, nil) }
     }
 }
 

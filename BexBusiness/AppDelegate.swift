@@ -1,12 +1,14 @@
-// BexBusiness cho iPhone (Powered by Beso)
+// BexBusiness cho iPhone, iPad và Mac (Powered by Beso)
 // Vỏ app gốc bọc giao diện web của máy chủ BexBusiness: chọn máy chủ, quét mã QR, micro/camera cho phòng họp,
-// tải tệp, số tin chưa đọc trên biểu tượng app.
+// tải tệp, thông báo tin mới, số tin chưa đọc trên biểu tượng app. Trên Mac chạy bằng Mac Catalyst.
 import UIKit
+import UserNotifications
 
 @main
-final class AppDelegate: UIResponder, UIApplicationDelegate {
+final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
         return true
     }
 
@@ -16,17 +18,68 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         c.delegateClass = SceneDelegate.self
         return c
     }
+
+    // MARK: - Thông báo (do trang web tạo qua window.Notification, xem WebViewController)
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        // trang web chỉ gửi khi cửa sổ đang ẩn hoặc bị che, nên vẫn hiện dù app đang mở
+        completionHandler([.banner, .list, .sound])
+    }
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
+                                withCompletionHandler completionHandler: @escaping () -> Void) {
+        NotificationCenter.default.post(name: .bexNotificationClicked, object: nil, userInfo: response.notification.request.content.userInfo)
+        completionHandler()
+    }
+
+    // MARK: - Menu trên Mac, phím tắt trên iPad có bàn phím (giữ ⌘ để xem)
+
+    override func buildMenu(with builder: UIMenuBuilder) {
+        super.buildMenu(with: builder)
+        guard builder.system == .main else { return }
+        builder.remove(menu: .format)
+
+        let page = UIMenu(title: "", options: .displayInline, children: [
+            UIKeyCommand(title: "Tải lại trang", action: #selector(WebViewController.reloadPage), input: "r", modifierFlags: .command),
+        ])
+        let zoom = UIMenu(title: "", options: .displayInline, children: [
+            UIKeyCommand(title: "Phóng to", action: #selector(WebViewController.zoomIn), input: "=", modifierFlags: .command),
+            UIKeyCommand(title: "Thu nhỏ", action: #selector(WebViewController.zoomOut), input: "-", modifierFlags: .command),
+            UIKeyCommand(title: "Cỡ mặc định", action: #selector(WebViewController.zoomReset), input: "0", modifierFlags: .command),
+        ])
+        builder.insertChild(zoom, atStartOfMenu: .view)
+        builder.insertChild(page, atStartOfMenu: .view)
+
+        let server = UIMenu(title: "", options: .displayInline, children: [
+            UIKeyCommand(title: "Đổi máy chủ…", action: #selector(WebViewController.changeServerCommand), input: "k", modifierFlags: [.command, .shift]),
+        ])
+        builder.insertChild(server, atEndOfMenu: .file)
+    }
 }
 
-/// iOS mới bắt buộc dùng vòng đời UIScene (app không có scene sẽ bị dừng ngay khi mở)
+extension Notification.Name {
+    static let bexNotificationClicked = Notification.Name("bex.notificationClicked")
+}
+
+/// Mỗi cửa sổ là một scene. iPad (Split View, Stage Manager) và Mac mở được nhiều cửa sổ cùng lúc.
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
+        windowScene.title = "BexBusiness"
+        #if targetEnvironment(macCatalyst)
+        // thanh tiêu đề gọn: không chữ, không thanh công cụ, không đường kẻ, cùng màu nền với app
+        if let tb = windowScene.titlebar {
+            tb.titleVisibility = .hidden
+            tb.toolbar = nil
+            tb.separatorStyle = .none
+        }
+        windowScene.sizeRestrictions?.minimumSize = CGSize(width: 420, height: 560)
+        #endif
         let w = UIWindow(windowScene: windowScene)
-        w.backgroundColor = Theme.bg
-        w.overrideUserInterfaceStyle = .dark
+        Theme.apply(to: w)
         w.rootViewController = AppRouter.initialController()
         w.makeKeyAndVisible()
         window = w
@@ -43,6 +96,20 @@ enum Theme {
     static let muted = UIColor(red: 0xA3 / 255, green: 0xAB / 255, blue: 0xB9 / 255, alpha: 1)
     static let accent = UIColor(red: 0x3D / 255, green: 0x8B / 255, blue: 0xFF / 255, alpha: 1)
     static let bad = UIColor(red: 0xFF / 255, green: 0x70 / 255, blue: 0x70 / 255, alpha: 1)
+
+    /// Giao diện sáng/tối trang web chọn lần trước, nhớ lại để lúc mở app không bị nháy màu
+    static var webLight: Bool {
+        get { UserDefaults.standard.bool(forKey: "bex.lightTheme") }
+        set { UserDefaults.standard.set(newValue, forKey: "bex.lightTheme") }
+    }
+    static var webBg: UIColor { webLight ? bgLight : bg }
+
+    /// Màu cửa sổ theo giao diện trang (trên Mac là cả thanh tiêu đề)
+    static func apply(to w: UIWindow?) {
+        guard let w else { return }
+        w.backgroundColor = webBg
+        w.overrideUserInterfaceStyle = webLight ? .light : .dark
+    }
 }
 
 // MARK: - Địa chỉ máy chủ đã lưu
@@ -99,11 +166,29 @@ enum AppRouter {
         return SetupViewController(prefill: nil)
     }
 
-    static func show(_ vc: UIViewController) {
-        let scenes = UIApplication.shared.connectedScenes.compactMap { $0.delegate as? SceneDelegate }
-        guard let w = scenes.first?.window else { return }
+    /// Thay màn hình của đúng cửa sổ đang chứa `current` (khi mở nhiều cửa sổ trên iPad/Mac)
+    static func show(_ vc: UIViewController, from current: UIViewController) {
+        let fallback = UIApplication.shared.connectedScenes.compactMap { ($0.delegate as? SceneDelegate)?.window }.first
+        guard let w = current.view.window ?? fallback else { return }
         UIView.transition(with: w, duration: 0.25, options: .transitionCrossDissolve, animations: {
             w.rootViewController = vc
         })
     }
+}
+
+/// Màn hình gọn giữa iPad/Mac: không kéo giãn hết bề ngang
+func pinReadableWidth(_ v: UIView, in g: UILayoutGuide, max: CGFloat = 420, margin: CGFloat = 24) {
+    let fill = v.widthAnchor.constraint(equalTo: g.widthAnchor, constant: -2 * margin)
+    fill.priority = .defaultHigh
+    NSLayoutConstraint.activate([
+        v.centerXAnchor.constraint(equalTo: g.centerXAnchor),
+        v.widthAnchor.constraint(lessThanOrEqualToConstant: max),
+        v.leadingAnchor.constraint(greaterThanOrEqualTo: g.leadingAnchor, constant: margin),
+        fill,
+    ])
+}
+
+/// Nút tự vẽ màu: trên Mac giữ kiểu iPad thay vì nút macOS mặc định
+func keepCustomLook(_ b: UIButton) {
+    if #available(iOS 15.0, *) { b.preferredBehavioralStyle = .pad }
 }

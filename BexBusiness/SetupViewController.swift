@@ -19,6 +19,13 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
 
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // màn hình này luôn nền tối: cửa sổ (và thanh tiêu đề trên Mac) theo màu tối
+        view.window?.backgroundColor = Theme.bg
+        view.window?.overrideUserInterfaceStyle = .dark
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = Theme.bg
@@ -73,8 +80,14 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         spinner.color = Theme.muted
         spinner.hidesWhenStopped = true
 
-        let hint = label("Trên máy tính chạy BexBusiness: chuột phải biểu tượng ở khay → \"Mở ra internet\" để thấy địa chỉ và mã QR.",
-                         size: 13, color: Theme.muted)
+        #if targetEnvironment(macCatalyst)
+        // trên Mac không quét QR bằng camera máy tính: dán địa chỉ là nhanh nhất
+        scanButton.isHidden = true
+        let hintText = "Trên máy chủ BexBusiness (app Windows): chuột phải biểu tượng ở khay → \"Mở ra internet\", sao chép địa chỉ rồi dán vào đây."
+        #else
+        let hintText = "Trên máy tính chạy BexBusiness: chuột phải biểu tượng ở khay → \"Mở ra internet\" để thấy địa chỉ và mã QR."
+        #endif
+        let hint = label(hintText, size: 13, color: Theme.muted)
 
         // logo nằm giữa: bọc trong một view để stack (căn đầy chiều ngang) không kéo giãn ảnh
         let logoWrap = UIView()
@@ -104,11 +117,10 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         let g = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
             stack.centerYAnchor.constraint(equalTo: g.centerYAnchor, constant: -20),
-            stack.leadingAnchor.constraint(equalTo: g.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: g.trailingAnchor, constant: -24),
             powered.centerXAnchor.constraint(equalTo: g.centerXAnchor),
             powered.bottomAnchor.constraint(equalTo: g.bottomAnchor, constant: -12),
         ])
+        pinReadableWidth(stack, in: g)
         view.addGestureRecognizer(UITapGestureRecognizer(target: view, action: #selector(UIView.endEditing(_:))))
     }
 
@@ -127,6 +139,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         b.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
         b.layer.cornerRadius = 12
         b.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        keepCustomLook(b)
         if filled {
             b.backgroundColor = Theme.accent
             b.setTitleColor(.white, for: .normal)
@@ -170,7 +183,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
             do {
                 try await ServerStore.check(url)
                 ServerStore.url = url
-                AppRouter.show(WebViewController(base: url))
+                AppRouter.show(WebViewController(base: url), from: self)
             } catch {
                 self.showError(error.localizedDescription)
             }

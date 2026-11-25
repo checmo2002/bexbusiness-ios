@@ -1,4 +1,4 @@
-name: Build thử iOS
+name: Build thử iPhone, iPad, Mac
 on:
   push:
   workflow_dispatch:
@@ -27,6 +27,12 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO build | tee build2.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build2.log
+      - name: Build cho Mac (Mac Catalyst, không ký)
+        run: |
+          xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Release \
+            -destination 'generic/platform=macOS,variant=Mac Catalyst' \
+            CODE_SIGNING_ALLOWED=NO build | tee build3.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build3.log
 
   screenshots:
     needs: build
@@ -51,7 +57,7 @@ jobs:
               f = os.path.join('srv', rel); os.makedirs(os.path.dirname(f), exist_ok=True); open(f,'wb').write(base64.b64decode(b))
           PY
           cd srv && (PORT=3999 BEX_DATA_DIR=$RUNNER_TEMP/data nohup node server.js > ../server.log 2>&1 &) && sleep 3 && curl -s localhost:3999/api/state
-      - name: Build, cài lên máy ảo iPhone và chụp màn hình
+      - name: Build, cài lên máy ảo iPhone/iPad và chụp màn hình
         run: |
           xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build -quiet
@@ -67,6 +73,35 @@ jobs:
           xcrun simctl spawn $DEV defaults write vn.beso.bexbusiness bex.serverURL -string http://localhost:3999
           xcrun simctl launch $DEV vn.beso.bexbusiness && sleep 10
           xcrun simctl io $DEV screenshot screenshots/2-trang-may-chu.png
+          xcrun simctl shutdown $DEV || true
+          # iPad: dọc đã rộng hơn 760pt nên trang web hiện bố cục máy tính
+          PAD=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];v=[x for k,l in d.items() if 'iOS' in k for x in l if x['name'].startswith('iPad')];p=[x for x in v if x['name'].startswith('iPad Pro 11')] or [x for x in v if x['name'].startswith('iPad Air')] or v;print(p[0]['udid'])")
+          xcrun simctl boot $PAD && xcrun simctl bootstatus $PAD -b
+          xcrun simctl status_bar $PAD override --time 9:41 --batteryLevel 100 --wifiBars 3 || true
+          xcrun simctl install $PAD $APP
+          xcrun simctl launch $PAD vn.beso.bexbusiness && sleep 6
+          xcrun simctl io $PAD screenshot screenshots/3-ipad-chon-may-chu.png
+          xcrun simctl terminate $PAD vn.beso.bexbusiness
+          xcrun simctl spawn $PAD defaults write vn.beso.bexbusiness bex.serverURL -string http://localhost:3999
+          xcrun simctl launch $PAD vn.beso.bexbusiness && sleep 10
+          xcrun simctl io $PAD screenshot screenshots/4-ipad-trang-may-chu.png
+          xcrun simctl shutdown $PAD || true
+      - name: Build bản Mac (ký tạm ad-hoc), mở và chụp màn hình
+        continue-on-error: true
+        run: |
+          xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Debug \
+            -destination 'platform=macOS,variant=Mac Catalyst' -derivedDataPath ddmac \
+            CODE_SIGN_IDENTITY=- CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM= CODE_SIGNING_REQUIRED=NO build -quiet
+          MAC=$(ls -d ddmac/Build/Products/Debug-maccatalyst/BexBusiness.app)
+          open "$MAC" && sleep 8
+          screencapture -x screenshots/5-mac-chon-may-chu.png
+          osascript -e 'quit app "BexBusiness"' || pkill -x BexBusiness || true
+          sleep 2
+          # app Mac chạy trong sandbox: cài đặt nằm trong thư mục Containers
+          defaults write "$HOME/Library/Containers/vn.beso.bexbusiness/Data/Library/Preferences/vn.beso.bexbusiness" bex.serverURL -string http://localhost:3999
+          open "$MAC" && sleep 12
+          screencapture -x screenshots/6-mac-trang-may-chu.png
+          osascript -e 'quit app "BexBusiness"' || pkill -x BexBusiness || true
       - name: Lưu ảnh vào repo
         run: |
           git config user.name "github-actions" && git config user.email "actions@github.com"
