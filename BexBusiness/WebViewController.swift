@@ -52,6 +52,11 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         ucc.addUserScript(WKUserScript(source: Self.notificationShim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.lockZoom, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: NativeTabs.script, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+        #if !targetEnvironment(macCatalyst)
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            ucc.addUserScript(WKUserScript(source: NativeTabs.earlyScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
+        #endif
 
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc

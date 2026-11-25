@@ -1,0 +1,19 @@
+<!doctype html><html lang="vi" class="t-dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="/style.css"></head><body><div id="app"><div class="shell">
+<nav class="rail">
+<button type="button" class="home-btn on" data-view="home" aria-label="Trang chủ">B<span class="hb" id="homebadge">3</span></button>
+<span class="rail-sep"></span>
+<div class="rail-scroll" id="cos"><div class="co-group" style="display:flex;gap:8px;align-items:center;background:#1e2633;border-radius:16px">
+<button type="button" class="co on sel" data-company="1" title="BesoStudios"><span class="cav" style="display:block;width:44px;height:44px;border-radius:12px;background:#666"></span></button>
+<button type="button" class="dp" data-dept-nav="1" title="Ban lãnh đạo"><span class="dav" style="display:block;width:38px;height:38px;border-radius:12px;background:#4a9"></span></button>
+<button type="button" class="dp" data-dept-nav="2" title="Kỹ Thuật"><span class="dav" style="display:block;width:38px;height:38px;border-radius:12px;background:#d84"></span></button>
+</div></div>
+<span class="rail-sep"></span>
+<button type="button" data-view="chat" aria-label="Chat">C</button><button type="button" data-view="calendar" aria-label="Lịch và kế hoạch">L</button><button type="button" data-view="drive" aria-label="Kho file">F</button><button type="button" data-view="att" aria-label="Chấm công và đơn từ">A</button><button type="button" data-view="tasks" aria-label="Công việc">T</button><button type="button" data-act="theme" aria-label="Đổi chế độ sáng / tối">S</button><button type="button" data-act="logout" aria-label="Đăng xuất">X</button>
+</nav>
+<main class="main" id="main"><div id="out" style="color:#fff;font:13px/1.5 monospace;padding:20px 14px;white-space:pre-wrap"></div></main>
+<nav class="tabbar" id="tabbar"><button type="button" data-tab="home" class="on"><span class="tl">WEB-TRANG-CHU</span></button><button type="button" data-tab="chat"><span class="tl">WEB-CHAT</span></button><button type="button" data-tab="more"><span class="tl">WEB-THEM</span></button></nav>
+</div></div>
+<div id="probe" style="position:fixed;left:0;top:0;width:1px;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);visibility:hidden"></div>
+<script src="/t.js"></script></body></html>
