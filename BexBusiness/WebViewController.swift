@@ -205,6 +205,14 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
       var m = document.querySelector('meta[name=viewport]');
       if (!m) { m = document.createElement('meta'); m.name = 'viewport'; (document.head || document.documentElement).appendChild(m); }
       m.setAttribute('content', c);
+      // Thanh điều hướng dưới (điện thoại) chỉ vuốt ngang, không bị kéo lên/xuống rồi kẹt lệch.
+      // Tạm vá phía app; phiên Web sẽ sửa gốc khi làm lại thanh dưới (claude/yeu-cau-cho-web.md).
+      var st = document.createElement('style');
+      st.id = 'bex-app-fix';
+      st.textContent = 'html,body{overscroll-behavior:none}' +
+        '@media (max-width:760px){.rail{touch-action:pan-x;overscroll-behavior:contain;overflow-y:hidden}' +
+        '.rail .rail-scroll,.rail .co-group,.rail .co-depts{touch-action:pan-x}}';
+      (document.head || document.documentElement).appendChild(st);
     })();
     """
 
