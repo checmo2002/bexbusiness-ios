@@ -101,8 +101,13 @@ enum NativeTabs {
     })();
     """#
 
+    /// iPhone luôn dùng thanh gốc: đánh dấu ngay khi trang bắt đầu tải để thanh 5 mục của trang (1.3.9+) không lóe lên.
+    /// Trang chưa đăng nhập (không có .rail) thì app bỏ dấu này khi nhận tin `nav`.
+    static let earlyScript = "document.documentElement.classList.add('bex-native-tabs');"
+
     /// Khi app dùng thanh gốc: ẩn thanh của trang, trang kéo xuống sát đáy (đáy trang = mép trên thanh gốc)
-    static let css = "@media (max-width:760px){html.bex-native-tabs .rail{display:none!important}" +
+    /// (Máy chủ 1.3.9+ tự làm việc này qua lớp bex-native-tabs; giữ lại cho máy chủ cũ hơn.)
+    static let css = "@media (max-width:760px){html.bex-native-tabs .rail,html.bex-native-tabs #tabbar,html.bex-native-tabs #msheet{display:none!important}" +
         "html.bex-native-tabs .main,html.bex-native-tabs #main,html.bex-native-tabs .side,html.bex-native-tabs .shell.side-open .m-back{bottom:0!important}" +
         "html.bex-native-tabs #toast,html.bex-native-tabs .callbox,html.bex-native-tabs .dv-ups{bottom:16px!important}}"
 }
