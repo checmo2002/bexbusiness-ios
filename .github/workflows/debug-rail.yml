@@ -4,7 +4,7 @@ on:
     branches: [debug-rail]
 jobs:
   rail:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: write
@@ -16,13 +16,13 @@ jobs:
           xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build -quiet
           APP=dd/Build/Products/Debug-iphonesimulator/BexBusiness.app
-          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16') and 'Plus' not in x['name'] and 'e' != x['name'][-1]][0])")
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 1') and 'Plus' not in x['name'] and 'Max' not in x['name'] and 'e' != x['name'][-1] and 'Air' not in x['name']][0])")
           xcrun simctl boot $DEV && xcrun simctl bootstatus $DEV -b
           xcrun simctl install $DEV $APP
           xcrun simctl spawn $DEV defaults write vn.beso.bexbusiness bex.serverURL -string http://localhost:3998
           xcrun simctl launch $DEV vn.beso.bexbusiness && sleep 12
-          mkdir -p ci-test/out && xcrun simctl io $DEV screenshot ci-test/out/rail.png
+          mkdir -p ci-test/out && xcrun simctl io $DEV screenshot ci-test/out/rail-ios26.png
       - name: Lưu ảnh
         run: |
           git config user.name "github-actions" && git config user.email "actions@github.com"
-          git add ci-test/out && git commit -m "Ảnh đo thanh dưới [skip ci]" && git push
+          git pull --rebase || true; git add ci-test/out && git commit -m "Ảnh đo thanh dưới [skip ci]" && git push
