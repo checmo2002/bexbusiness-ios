@@ -43,12 +43,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         let page = UIMenu(title: "", options: .displayInline, children: [
             UIKeyCommand(title: "Tải lại trang", action: #selector(WebViewController.reloadPage), input: "r", modifierFlags: .command),
         ])
-        let zoom = UIMenu(title: "", options: .displayInline, children: [
-            UIKeyCommand(title: "Phóng to", action: #selector(WebViewController.zoomIn), input: "=", modifierFlags: .command),
-            UIKeyCommand(title: "Thu nhỏ", action: #selector(WebViewController.zoomOut), input: "-", modifierFlags: .command),
-            UIKeyCommand(title: "Cỡ mặc định", action: #selector(WebViewController.zoomReset), input: "0", modifierFlags: .command),
-        ])
-        builder.insertChild(zoom, atStartOfMenu: .view)
         builder.insertChild(page, atStartOfMenu: .view)
 
         let server = UIMenu(title: "", options: .displayInline, children: [

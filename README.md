@@ -6,6 +6,7 @@ Có sẵn:
 - Chọn máy chủ: nhập địa chỉ, hoặc quét mã QR trong cửa sổ "Mở ra internet" của app Windows.
 - Micro và camera cho phòng họp, quét QR để đăng nhập trên máy tính và chấm công.
 - Tải tệp: mở bảng chia sẻ để lưu vào Tệp hoặc gửi qua Zalo.
+- App đứng yên như app gốc (không phóng to cả trang). Bấm **Xem** ở tệp PDF, ảnh, video, Word/Excel thì mở trình xem tài liệu: chụm hai ngón để phóng to, có nút chia sẻ.
 - Số tin chưa đọc hiện trên biểu tượng app.
 - Giao diện sáng/tối, có màn hình báo lỗi khi mất kết nối và nút đổi máy chủ.
 - Thông báo tin nhắn mới của hệ thống (bật trong Cài đặt người dùng của BexBusiness). Trên Mac nhận được cả khi cửa sổ bị che; trên iPhone/iPad chỉ khi app còn mở.
@@ -13,7 +14,7 @@ Có sẵn:
 **iPad:** xoay ngang/dọc, chia đôi màn hình (Split View), Stage Manager, mở nhiều cửa sổ, kéo thả tệp vào khung chat, bàn phím rời có phím tắt (giữ ⌘ để xem).
 
 **Mac:** thanh tiêu đề gọn cùng màu app, cửa sổ kéo to nhỏ tuỳ ý, mở nhiều cửa sổ (⌘N), kéo thả tệp từ Finder vào khung chat, tải tệp mở hộp thoại Lưu, số tin chưa đọc trên Dock. Menu và phím tắt:
-- ⌘R tải lại trang · ⌘= / ⌘- / ⌘0 phóng to, thu nhỏ, cỡ mặc định · ⇧⌘K đổi máy chủ
+- ⌘R tải lại trang · ⇧⌘K đổi máy chủ
 
 ## Cài lên iPhone bằng Apple ID miễn phí
 

@@ -1,10 +1,11 @@
 import UIKit
 import WebKit
 import UserNotifications
+import QuickLook
 
 /// Màn hình chính: giao diện web của máy chủ BexBusiness trong WKWebView.
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
-                                WKScriptMessageHandlerWithReply, WKDownloadDelegate {
+                                WKScriptMessageHandlerWithReply, WKDownloadDelegate, QLPreviewControllerDataSource {
     private let base: URL
     private var web: WKWebView!
     private let errorView = UIView()
@@ -13,6 +14,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var titleObservation: NSKeyValueObservation?
     private var lightTheme = Theme.webLight
     private var downloadFiles: [ObjectIdentifier: URL] = [:]
+    /// tải về để xem trong trình xem tài liệu (thay vì bảng chia sẻ)
+    private var previewDownloads: Set<ObjectIdentifier> = []
+    private var previewFile: URL?
     private var loadedOnce = false
 
     init(base: URL) {
@@ -40,6 +44,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         let js = "window.bexMobile = Object.freeze({ platform: 'ios', app: 'ios', device: '\(Self.deviceKind)', version: '\(version)' });"
         ucc.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         ucc.addUserScript(WKUserScript(source: Self.notificationShim, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        ucc.addUserScript(WKUserScript(source: Self.lockZoom, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
 
         let cfg = WKWebViewConfiguration()
         cfg.userContentController = ucc
@@ -54,7 +59,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         web.isOpaque = false
         web.backgroundColor = Theme.webBg
         web.scrollView.backgroundColor = Theme.webBg
-        web.pageZoom = Self.savedZoom
         web.scrollView.contentInsetAdjustmentBehavior = .never
         web.scrollView.bounces = false
         web.allowsLinkPreview = false
@@ -193,25 +197,16 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         if web.url == nil || !loadedOnce { web.load(URLRequest(url: base)) } else { web.reload() }
     }
 
-    private static var savedZoom: CGFloat {
-        get { let z = UserDefaults.standard.double(forKey: "bex.zoom"); return z > 0 ? CGFloat(z) : 1 }
-        set { UserDefaults.standard.set(Double(newValue), forKey: "bex.zoom") }
-    }
-
-    private func setZoom(_ z: CGFloat) {
-        let v = min(2, max(0.5, (z * 10).rounded() / 10))
-        web.pageZoom = v
-        Self.savedZoom = v
-    }
-
-    @objc func zoomIn() { setZoom(web.pageZoom + 0.1) }
-    @objc func zoomOut() { setZoom(web.pageZoom - 0.1) }
-    @objc func zoomReset() { setZoom(1) }
-
-    /// ⌘+ (bàn phím có phím + riêng) cũng phóng to, giống trình duyệt; không hiện trong menu
-    override var keyCommands: [UIKeyCommand]? {
-        [UIKeyCommand(input: "+", modifierFlags: .command, action: #selector(zoomIn))]
-    }
+    /// App đứng yên như app gốc: không chụm hai ngón / chạm đúp để phóng cả trang, không tự phóng khi gõ chữ.
+    /// Ảnh, PDF, video mở bằng trình xem tài liệu riêng (xem openPreview), ở đó mới phóng to được.
+    static let lockZoom = """
+    (function () {
+      var c = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover';
+      var m = document.querySelector('meta[name=viewport]');
+      if (!m) { m = document.createElement('meta'); m.name = 'viewport'; (document.head || document.documentElement).appendChild(m); }
+      m.setAttribute('content', c);
+    })();
+    """
 
     @objc private func appBecameActive() {
         // iOS có thể đã tắt tiến trình web khi app nằm nền lâu: trang trắng thì tải lại
@@ -250,6 +245,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             setNeedsStatusBarAppearanceUpdate()
         case "changeServer":
             changeServer()
+        case "preview":
+            // trang web nhờ app mở tệp bằng trình xem tài liệu: {type:'preview', url}
+            if let s = body["url"] as? String, let u = URL(string: s, relativeTo: web.url ?? base)?.absoluteURL, isOwn(u) { openPreview(u) }
         default:
             break
         }
@@ -319,8 +317,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+        // "Xem" tệp (PDF…) mở tab mới: dùng trình xem tài liệu thay vì đè lên app (không có nút quay lại)
         if let url = navigationAction.request.url {
-            if isOwn(url) { webView.load(navigationAction.request) } else { UIApplication.shared.open(url) }
+            if isOwn(url) { openPreview(url) } else { UIApplication.shared.open(url) }
         }
         return nil
     }
@@ -370,6 +369,22 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         download.delegate = self
     }
 
+    // MARK: - Trình xem tài liệu (ảnh, PDF, video, Word/Excel): chụm hai ngón để phóng, có nút chia sẻ
+
+    private func openPreview(_ url: URL) {
+        loadingView.startAnimating()
+        web.startDownload(using: URLRequest(url: url)) { [weak self] d in
+            d.delegate = self
+            self?.previewDownloads.insert(ObjectIdentifier(d))
+        }
+    }
+
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int { previewFile == nil ? 0 : 1 }
+
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        (previewFile ?? base) as NSURL
+    }
+
     func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String,
                   completionHandler: @escaping (URL?) -> Void) {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tai-ve", isDirectory: true)
@@ -383,6 +398,14 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func downloadDidFinish(_ download: WKDownload) {
         guard let file = downloadFiles.removeValue(forKey: ObjectIdentifier(download)) else { return }
+        if previewDownloads.remove(ObjectIdentifier(download)) != nil {
+            loadingView.stopAnimating()
+            previewFile = file
+            let ql = QLPreviewController()
+            ql.dataSource = self
+            present(ql, animated: true)
+            return
+        }
         #if targetEnvironment(macCatalyst)
         // Mac: hộp thoại "Lưu" quen thuộc thay cho bảng chia sẻ
         present(UIDocumentPickerViewController(forExporting: [file], asCopy: true), animated: true)
@@ -396,7 +419,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         downloadFiles.removeValue(forKey: ObjectIdentifier(download))
-        let a = UIAlertController(title: "Không tải được tệp", message: error.localizedDescription, preferredStyle: .alert)
+        previewDownloads.remove(ObjectIdentifier(download))
+        loadingView.stopAnimating()
+        let a = UIAlertController(title: "Không mở được tệp", message: error.localizedDescription, preferredStyle: .alert)
         a.addAction(UIAlertAction(title: "OK", style: .default))
         present(a, animated: true)
     }
