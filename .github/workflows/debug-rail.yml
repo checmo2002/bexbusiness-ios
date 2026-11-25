@@ -1,0 +1,28 @@
+name: Đo thanh dưới trên máy ảo iPhone
+on:
+  push:
+    branches: [debug-rail]
+jobs:
+  rail:
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, mở trang thử thanh dưới, chụp màn hình
+        run: |
+          (nohup python3 ci-test/serve.py 3998 > serve.log 2>&1 &) ; sleep 1; curl -s localhost:3998/api/state
+          xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build -quiet
+          APP=dd/Build/Products/Debug-iphonesimulator/BexBusiness.app
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16') and 'Plus' not in x['name'] and 'e' != x['name'][-1]][0])")
+          xcrun simctl boot $DEV && xcrun simctl bootstatus $DEV -b
+          xcrun simctl install $DEV $APP
+          xcrun simctl spawn $DEV defaults write vn.beso.bexbusiness bex.serverURL -string http://localhost:3998
+          xcrun simctl launch $DEV vn.beso.bexbusiness && sleep 12
+          mkdir -p ci-test/out && xcrun simctl io $DEV screenshot ci-test/out/rail.png
+      - name: Lưu ảnh
+        run: |
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add ci-test/out && git commit -m "Ảnh đo thanh dưới [skip ci]" && git push

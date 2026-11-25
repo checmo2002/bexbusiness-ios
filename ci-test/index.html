@@ -1,0 +1,18 @@
+<!doctype html><html lang="vi" class="t-dark"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="/style.css"></head><body><div id="app"><div class="shell">
+<nav class="rail">
+<button type="button" class="home-btn on" data-view="home"><span>B</span></button>
+<span class="rail-sep"></span>
+<div class="rail-scroll" id="cos"><div class="co-group" style="display:flex;gap:8px;align-items:center;background:#1e2633;border-radius:16px">
+<button type="button" class="co on sel"><span class="cav" style="display:block;width:44px;height:44px;border-radius:12px;background:#666"></span></button>
+<button type="button" class="dp"><span class="dav" style="display:block;width:38px;height:38px;border-radius:12px;background:#4a9"></span></button>
+<button type="button" class="dp"><span class="dav" style="display:block;width:38px;height:38px;border-radius:12px;background:#d84"></span></button>
+</div></div>
+<span class="rail-sep"></span>
+<button type="button" data-view="chat">C</button><button type="button" data-view="calendar">L</button><button type="button" data-view="drive">F</button>
+</nav>
+<main class="main" id="main"><div id="out" style="color:#fff;font:13px/1.5 monospace;padding:20px 14px;white-space:pre-wrap"></div></main>
+</div></div>
+<div id="probe" style="position:fixed;left:0;top:0;width:1px;padding-bottom:env(safe-area-inset-bottom);padding-top:env(safe-area-inset-top);visibility:hidden"></div>
+<script src="/t.js"></script></body></html>
