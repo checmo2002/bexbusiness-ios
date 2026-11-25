@@ -39,7 +39,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         let title = UILabel()
         title.attributedText = {
             let s = NSMutableAttributedString(string: "Bex", attributes: [.foregroundColor: Theme.text])
-            s.append(NSAttributedString(string: "Business", attributes: [.foregroundColor: Theme.accent]))
+            s.append(NSAttributedString(string: "Business", attributes: [.foregroundColor: Theme.accentText]))
             return s
         }()
         title.font = .systemFont(ofSize: 30, weight: .bold)
