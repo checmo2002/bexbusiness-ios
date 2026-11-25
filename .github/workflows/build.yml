@@ -22,3 +22,47 @@ jobs:
             -sdk iphoneos -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO build | tee build2.log | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build2.log
+
+  screenshots:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Chạy máy chủ BexBusiness bản mới nhất
+        run: |
+          curl -sL https://raw.githubusercontent.com/checmo2002/bexbusiness-releases/main/latest.json -o latest.json
+          F=$(python3 -c "import json;print(json.load(open('latest.json'))['server']['file'])")
+          curl -sL "https://raw.githubusercontent.com/checmo2002/bexbusiness-releases/main/$F" -o server.pack
+          python3 - <<'PY'
+          import gzip, json, base64, os
+          p = json.loads(gzip.decompress(open('server.pack','rb').read()))
+          for rel, b in p['files'].items():
+              f = os.path.join('srv', rel); os.makedirs(os.path.dirname(f), exist_ok=True); open(f,'wb').write(base64.b64decode(b))
+          PY
+          cd srv && (PORT=3999 BEX_DATA_DIR=$RUNNER_TEMP/data nohup node server.js > ../server.log 2>&1 &) && sleep 3 && curl -s localhost:3999/api/state
+      - name: Build, cài lên máy ảo iPhone và chụp màn hình
+        run: |
+          xcodebuild -project BexBusiness.xcodeproj -scheme BexBusiness -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath dd CODE_SIGNING_ALLOWED=NO build -quiet
+          APP=dd/Build/Products/Debug-iphonesimulator/BexBusiness.app
+          DEV=$(xcrun simctl list devices available -j | python3 -c "import json,sys;d=json.load(sys.stdin)['devices'];print([x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone 16') and 'Plus' not in x['name'] and 'e' != x['name'][-1]][0])")
+          xcrun simctl boot $DEV && xcrun simctl bootstatus $DEV -b
+          xcrun simctl status_bar $DEV override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          xcrun simctl install $DEV $APP
+          mkdir -p screenshots
+          xcrun simctl launch $DEV vn.beso.bexbusiness && sleep 6
+          xcrun simctl io $DEV screenshot screenshots/1-chon-may-chu.png
+          xcrun simctl terminate $DEV vn.beso.bexbusiness
+          xcrun simctl spawn $DEV defaults write vn.beso.bexbusiness bex.serverURL -string http://localhost:3999
+          xcrun simctl launch $DEV vn.beso.bexbusiness && sleep 10
+          xcrun simctl io $DEV screenshot screenshots/2-trang-may-chu.png
+      - name: Lưu ảnh vào repo
+        run: |
+          git config user.name "github-actions" && git config user.email "actions@github.com"
+          git add screenshots && git commit -m "Ảnh chụp máy ảo iPhone [skip ci]" && git push || true

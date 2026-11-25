@@ -136,7 +136,6 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
             b.tintColor = Theme.text
             b.layer.borderWidth = 1
             b.layer.borderColor = Theme.line.cgColor
-            b.imageEdgeInsets = UIEdgeInsets(top: 0, left: -6, bottom: 0, right: 6)
         }
     }
 
