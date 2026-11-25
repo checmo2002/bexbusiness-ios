@@ -2,7 +2,6 @@
 // Vỏ app gốc bọc giao diện web của máy chủ BexBusiness: chọn máy chủ, quét mã QR, micro/camera cho phòng họp,
 // tải tệp, số tin chưa đọc trên biểu tượng app.
 import UIKit
-import UserNotifications
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -16,8 +15,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         w.rootViewController = AppRouter.initialController()
         w.makeKeyAndVisible()
         window = w
-        // xin quyền hiện số tin chưa đọc trên biểu tượng app
-        UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
         return true
     }
 }

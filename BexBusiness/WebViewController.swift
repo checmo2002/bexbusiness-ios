@@ -83,6 +83,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
         loadingView.startAnimating()
         web.load(URLRequest(url: base))
+        // xin quyền hiện số tin chưa đọc trên biểu tượng app (hỏi khi đã vào máy chủ, không hỏi ngay lúc mở app)
+        UNUserNotificationCenter.current().requestAuthorization(options: [.badge]) { _, _ in }
     }
 
     // MARK: - Màn hình lỗi kết nối
