@@ -28,6 +28,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var previewDownloads: Set<ObjectIdentifier> = []
     private var previewFile: URL?
     private var loadedOnce = false
+    private var askedNotify = false
 
     init(base: URL, startPath: String? = nil) {
         self.base = base
@@ -114,9 +115,6 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
         loadingView.startAnimating()
         web.load(URLRequest(url: startURL))
-        // xin quyền thông báo + số tin chưa đọc trên biểu tượng app (hỏi khi đã vào máy chủ, không hỏi ngay lúc mở app).
-        // Hỏi đủ cả 3 trong một lần: iOS/macOS chỉ hiện hộp hỏi một lần duy nhất.
-        UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .alert, .sound]) { _, _ in }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -346,6 +344,13 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         case "nav":
             navState = NavState(body)
             updateTabBar(syncPage: true)
+            // đã đăng nhập vào công ty: lúc này mới xin quyền thông báo + số tin chưa đọc trên biểu tượng app
+            // (không hỏi ở màn đăng nhập). Hỏi đủ cả 3 trong một lần: iOS/macOS chỉ hiện hộp hỏi một lần.
+            // Tài khoản cá nhân thì hỏi khi bật thông báo trong Cài đặt của trang (qua window.Notification).
+            if navState.hasRail && !askedNotify {
+                askedNotify = true
+                UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .alert, .sound]) { _, _ in }
+            }
         case "preview":
             // trang web nhờ app mở tệp bằng trình xem tài liệu: {type:'preview', url}
             if let s = body["url"] as? String, let u = URL(string: s, relativeTo: web.url ?? base)?.absoluteURL, isOwn(u) { openPreview(u) }
