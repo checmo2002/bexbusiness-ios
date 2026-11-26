@@ -123,7 +123,9 @@ enum NativeTabs {
     /// (Máy chủ 1.3.9+ tự làm việc này qua lớp bex-native-tabs; giữ lại cho máy chủ cũ hơn.)
     static let css = "@media (max-width:760px){html.bex-native-tabs .rail,html.bex-native-tabs #tabbar,html.bex-native-tabs #msheet{display:none!important}" +
         "html.bex-native-tabs .main,html.bex-native-tabs #main,html.bex-native-tabs .side,html.bex-native-tabs .shell.side-open .m-back{bottom:0!important}" +
-        "html.bex-native-tabs #toast,html.bex-native-tabs .callbox,html.bex-native-tabs .dv-ups{bottom:16px!important}}"
+        "html.bex-native-tabs #toast,html.bex-native-tabs .callbox,html.bex-native-tabs .dv-ups{bottom:16px!important}" +
+        // đầu trang Cài đặt người dùng: Đăng xuất và Máy chủ đã có trong bảng Thêm của thanh Tab gốc → ẩn cho tiêu đề đủ chỗ
+        "html.bex-native-tabs .top [data-act=logout],html.bex-native-tabs .top [data-act=ios-server]{display:none!important}}"
 }
 
 /// Bảng "Thêm": chọn công ty / phòng ban, các mục còn lại, giao diện, đăng xuất
@@ -132,7 +134,7 @@ final class MoreSheetController: UITableViewController {
     private var sections: [(title: String?, rows: [Row])] = []
     private let tint: UIColor
 
-    init(state: NavState, tint: UIColor, perform: @escaping (String) -> Void, scan: (() -> Void)?) {
+    init(state: NavState, tint: UIColor, perform: @escaping (String) -> Void, scan: (() -> Void)?, advanced: @escaping () -> Void) {
         self.tint = tint
         super.init(style: .insetGrouped)
         title = "Thêm"
@@ -168,7 +170,10 @@ final class MoreSheetController: UITableViewController {
                        symbol: logout ? "rectangle.portrait.and.arrow.right" : "circle.lefthalf.filled", indent: 0, checked: false, dim: false,
                        destructive: logout, run: { perform("__bexNav.click(\(a.index))") })
         }
-        if !acts.isEmpty { sections.append((nil, acts)) }
+        var tail = acts
+        tail.insert(Row(title: "Máy chủ riêng (nâng cao)", subtitle: "Chỉ dùng khi công ty có máy chủ riêng", symbol: "server.rack", indent: 0,
+                        checked: false, dim: false, destructive: false, run: advanced), at: max(0, tail.count - 1))
+        sections.append((nil, tail))
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) không dùng") }
@@ -292,7 +297,7 @@ extension WebViewController: UITabBarDelegate {
         #endif
         let more = MoreSheetController(state: navState, tint: navState.accent ?? Theme.accent, perform: { [weak self] js in
             self?.web.evaluateJavaScript("window.__bexNav && " + js, completionHandler: nil)
-        }, scan: scan)
+        }, scan: scan, advanced: { [weak self] in self?.changeServerCommand() })
         let nav = UINavigationController(rootViewController: more)
         if let sheet = nav.sheetPresentationController {
             sheet.detents = [.medium(), .large()]

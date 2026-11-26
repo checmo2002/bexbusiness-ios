@@ -296,6 +296,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
       var st = document.createElement('style');
       st.id = 'bex-app-fix';
       st.textContent = 'html,body{overscroll-behavior:none}' +
+        // tiêu đề đầu trang luôn một dòng (dài thì "…"), không bị nút bên cạnh bóp thành mỗi chữ một dòng
+        '@media (max-width:760px){.top>div:first-child{min-width:0}.top h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}' +
         '@media (max-width:760px){.rail{touch-action:pan-x;overscroll-behavior:contain;overflow-y:hidden}' +
         '.rail .rail-scroll,.rail .co-group,.rail .co-depts{touch-action:pan-x}}';
       (document.head || document.documentElement).appendChild(st);
