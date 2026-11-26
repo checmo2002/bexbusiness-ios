@@ -1,11 +1,13 @@
 import UIKit
 
-/// Màn hình chọn máy chủ: nhập địa chỉ hoặc quét mã QR hiện trên app Windows ("Mở ra internet").
+/// Nâng cao: kết nối máy chủ riêng của công ty (nhập địa chỉ hoặc quét mã QR).
+/// Bình thường app vào thẳng máy chủ BexBusiness chung (bexbusiness.xyz), không qua màn này.
 final class SetupViewController: UIViewController, UITextFieldDelegate {
     private let prefill: URL?
     private let field = UITextField()
     private let connectButton = UIButton(type: .system)
     private let scanButton = UIButton(type: .system)
+    private let defaultButton = UIButton(type: .system)
     private let errorLabel = UILabel()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private var busy = false
@@ -44,11 +46,11 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         }()
         title.font = .systemFont(ofSize: 30, weight: .bold)
 
-        let sub = label("Kết nối tới máy chủ BexBusiness của công ty bạn.", size: 15, color: Theme.muted)
+        let sub = label("Nâng cao: máy chủ riêng của công ty", size: 15, color: Theme.muted)
 
-        field.placeholder = "vd: ten-cong-ty.trycloudflare.com"
+        field.placeholder = "vd: may-chu.cong-ty.vn"
         field.attributedPlaceholder = NSAttributedString(string: field.placeholder ?? "", attributes: [.foregroundColor: Theme.muted.withAlphaComponent(0.7)])
-        field.text = prefill?.absoluteString
+        field.text = prefill.flatMap { $0.host.map(ServerStore.isDefaultHost) == true ? nil : $0.absoluteString }
         field.textColor = Theme.text
         field.font = .systemFont(ofSize: 16)
         field.keyboardType = .URL
@@ -67,9 +69,12 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
 
         style(connectButton, title: "Kết nối", filled: true)
         connectButton.addTarget(self, action: #selector(connectTapped), for: .touchUpInside)
-        style(scanButton, title: "Quét mã QR trên máy tính", filled: false)
+        style(scanButton, title: "Quét mã QR", filled: false)
         scanButton.setImage(UIImage(systemName: "qrcode.viewfinder"), for: .normal)
         scanButton.addTarget(self, action: #selector(scanTapped), for: .touchUpInside)
+        style(defaultButton, title: "Dùng máy chủ BexBusiness", filled: false)
+        defaultButton.setImage(UIImage(systemName: "arrow.uturn.backward"), for: .normal)
+        defaultButton.addTarget(self, action: #selector(useDefaultTapped), for: .touchUpInside)
 
         errorLabel.textColor = Theme.bad
         errorLabel.font = .systemFont(ofSize: 14)
@@ -81,13 +86,10 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         spinner.hidesWhenStopped = true
 
         #if targetEnvironment(macCatalyst)
-        // trên Mac không quét QR bằng camera máy tính: dán địa chỉ là nhanh nhất
-        scanButton.isHidden = true
-        let hintText = "Trên máy chủ BexBusiness (app Windows): chuột phải biểu tượng ở khay → \"Mở ra internet\", sao chép địa chỉ rồi dán vào đây."
-        #else
-        let hintText = "Trên máy tính chạy BexBusiness: chuột phải biểu tượng ở khay → \"Mở ra internet\" để thấy địa chỉ và mã QR."
+        scanButton.isHidden = true // trên Mac không quét QR bằng camera máy tính: dán địa chỉ là nhanh nhất
         #endif
-        let hint = label(hintText, size: 13, color: Theme.muted)
+        let hint = label("Hầu hết công ty dùng chung máy chủ BexBusiness (bexbusiness.xyz) và không cần mục này. Chỉ nhập địa chỉ khi quản trị viên công ty bạn đưa máy chủ riêng.",
+                         size: 13, color: Theme.muted)
 
         // logo nằm giữa: bọc trong một view để stack (căn đầy chiều ngang) không kéo giãn ảnh
         let logoWrap = UIView()
@@ -99,7 +101,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         ])
         title.textAlignment = .center
 
-        let stack = UIStackView(arrangedSubviews: [logoWrap, title, sub, field, connectButton, scanButton, spinner, errorLabel, hint])
+        let stack = UIStackView(arrangedSubviews: [logoWrap, title, sub, field, connectButton, scanButton, spinner, errorLabel, defaultButton, hint])
         stack.axis = .vertical
         stack.alignment = .fill
         stack.spacing = 14
@@ -107,6 +109,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         stack.setCustomSpacing(6, after: title)
         stack.setCustomSpacing(24, after: sub)
         stack.setCustomSpacing(24, after: errorLabel)
+        stack.setCustomSpacing(18, after: defaultButton)
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         let powered = label("Powered by Beso", size: 12, color: Theme.muted)
@@ -167,13 +170,25 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
         present(scanner, animated: true)
     }
 
+    @objc private func useDefaultTapped() {
+        ServerStore.custom = nil
+        AppRouter.show(WebViewController(base: ServerStore.defaultURL), from: self)
+    }
+
     @objc private func connectTapped() {
         guard !busy else { return }
         view.endEditing(true)
-        guard let url = ServerStore.normalize(field.text ?? "") else {
-            showError("Nhập địa chỉ máy chủ, ví dụ ten-cong-ty.trycloudflare.com")
+        // quét/dán nhầm link mời vào công ty: mở thẳng link đó trên đúng máy chủ
+        if let j = ServerStore.joinLink(field.text ?? "") {
+            ServerStore.custom = j.server
+            AppRouter.show(WebViewController(base: ServerStore.current, startPath: j.path), from: self)
             return
         }
+        guard let url = ServerStore.normalize(field.text ?? "") else {
+            showError("Nhập địa chỉ máy chủ, ví dụ may-chu.cong-ty.vn")
+            return
+        }
+        if let h = url.host, ServerStore.isDefaultHost(h) { return useDefaultTapped() }
         busy = true
         errorLabel.isHidden = true
         spinner.startAnimating()
@@ -182,7 +197,7 @@ final class SetupViewController: UIViewController, UITextFieldDelegate {
             defer { self.busy = false; self.spinner.stopAnimating(); self.connectButton.isEnabled = true }
             do {
                 try await ServerStore.check(url)
-                ServerStore.url = url
+                ServerStore.custom = url
                 AppRouter.show(WebViewController(base: url), from: self)
             } catch {
                 self.showError(error.localizedDescription)

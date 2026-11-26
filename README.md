@@ -48,9 +48,11 @@ Bản Mac ký bằng Apple ID miễn phí chỉ chạy trên chính máy Mac đ�
 
 ## Kết nối máy chủ
 
-- **Cùng mạng Wi-Fi với máy chủ:** nhập `http://<IP máy chủ>:3000`. App Windows hiện sẵn địa chỉ này ở màn hình cài đặt.
-- **Ở xa:** trên máy chủ Windows, chuột phải biểu tượng BexBusiness ở khay, chọn **Mở ra internet…**, rồi trên iPhone/iPad bấm **Quét mã QR trên máy tính**. Trên Mac thì sao chép địa chỉ và dán vào.
-- Muốn đổi máy chủ sau này: vào **Cài đặt người dùng**, bấm nút **Máy chủ** ở góc trên (trên Mac còn có menu **File → Đổi máy chủ…**).
+- Mở app là vào thẳng máy chủ BexBusiness chung **https://bexbusiness.xyz**: đăng ký hoặc đăng nhập rồi dùng luôn, không phải nhập gì.
+- Tài khoản cá nhân chưa thuộc công ty nào vẫn dùng app bình thường. Muốn vào công ty: dán link mời, hoặc trong mục **Thêm** bấm **Quét mã QR mời vào công ty**.
+- Link `bexbusiness://join/<mã>` mở thẳng màn tham gia công ty trong app.
+- Mất mạng thì app hiện "Chưa kết nối được BexBusiness" và tự thử lại sau vài giây.
+- **Nâng cao: máy chủ riêng của công ty.** Ở màn mất kết nối bấm dòng "Nâng cao: máy chủ riêng của công ty", hoặc vào **Cài đặt người dùng → Máy chủ** (Mac: **File → Đổi máy chủ…**). Nhập địa chỉ hoặc quét mã QR. Nút **Dùng máy chủ BexBusiness** đưa app về máy chủ chung.
 
 ## Build thử tự động
 

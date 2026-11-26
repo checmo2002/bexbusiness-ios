@@ -11,6 +11,12 @@ struct NavState: Equatable {
     var hasRail = false
     var view = ""
     var badge = ""
+    /// chữ trên thanh 5 mục của web (#tabbar .tl): lãnh đạo thấy "Bảng công" thay "Chấm công"
+    var tabLabels: [String: String] = [:]
+    /// nút "+" tham gia / tạo công ty (#cos [data-act=join-co]), số thứ tự để bấm hộ
+    var joinIndex: Int?
+    /// chấm đỏ ở nút "Thêm" của web (vd. có người chờ duyệt vào công ty)
+    var moreDot = false
     var accent: UIColor?
     var places: [Place] = []
     var views: [Item] = []
@@ -22,6 +28,9 @@ struct NavState: Equatable {
         hasRail = d["rail"] as? Bool ?? false
         view = d["view"] as? String ?? ""
         badge = d["badge"] as? String ?? ""
+        tabLabels = d["tabs"] as? [String: String] ?? [:]
+        joinIndex = d["join"] as? Int
+        moreDot = d["moreDot"] as? Bool ?? false
         accent = (d["acc"] as? String).flatMap(UIColor.init(cssHex:))
         places = (d["places"] as? [[String: Any]] ?? []).map {
             Place(index: $0["i"] as? Int ?? -1, name: $0["name"] as? String ?? "", isDept: $0["dept"] as? Bool ?? false,
@@ -46,7 +55,9 @@ enum NativeTabs {
         switch v {
         case "drive": return "folder"
         case "calendar": return "calendar"
-        case "contracts": return "briefcase"
+        case "jobs": return "briefcase"
+        case "people": return "person.2"
+        case "contracts": return "doc.text"
         case "dash": return "chart.bar"
         case "admin": return "shield"
         case "plan": return "checkmark.seal"
@@ -67,7 +78,7 @@ enum NativeTabs {
       var css = document.createElement('style'); css.id = 'bex-native-tabs-css'; css.textContent = '%CSS%';
       (document.head || document.documentElement).appendChild(css);
       var last = '', els = [], timer = null;
-      function label(e) { return (e.getAttribute('aria-label') || e.getAttribute('title') || '').trim(); }
+      function label(e) { var rl = e.querySelector('.rl'); return ((rl && rl.textContent) || e.getAttribute('aria-label') || e.getAttribute('title') || '').trim(); }
       function scan() {
         var r = document.querySelector('.rail'), st = { type: 'nav', rail: !!r };
         els = [];
@@ -75,7 +86,10 @@ enum NativeTabs {
           var on = r.querySelector('[data-view].on'); st.view = on ? on.getAttribute('data-view') : '';
           var hb = document.getElementById('homebadge'); st.badge = (hb && !hb.hidden) ? hb.textContent.trim() : '';
           st.acc = getComputedStyle(document.documentElement).getPropertyValue('--acc').trim();
-          st.places = []; st.views = []; st.acts = [];
+          st.places = []; st.views = []; st.acts = []; st.tabs = {};
+          document.querySelectorAll('#tabbar [data-tab]').forEach(function (b) { var t = b.querySelector('.tl'); if (t) st.tabs[b.getAttribute('data-tab')] = t.textContent.trim(); });
+          var jc = r.querySelector('#cos [data-act="join-co"]'); if (jc) st.join = els.push(jc) - 1;
+          var md = r.querySelector('.rail-more .hb'); st.moreDot = !!(md && !md.hidden);
           r.querySelectorAll('#cos [data-company], #cos [data-dept-nav]').forEach(function (e) {
             var dept = e.hasAttribute('data-dept-nav');
             st.places.push({ i: els.push(e) - 1, name: (e.getAttribute('title') || '').split(' · ')[0], dept: dept,
@@ -84,7 +98,7 @@ enum NativeTabs {
           });
           [].forEach.call(r.children, function (e) {
             if (e.hasAttribute('data-view')) st.views.push({ i: els.push(e) - 1, v: e.getAttribute('data-view'), name: label(e) });
-            else if (e.hasAttribute('data-act')) st.acts.push({ i: els.push(e) - 1, a: e.getAttribute('data-act'), name: label(e) });
+            else if (/^(theme|logout)$/.test(e.getAttribute('data-act') || '')) st.acts.push({ i: els.push(e) - 1, a: e.getAttribute('data-act'), name: label(e) });
           });
         }
         var s = JSON.stringify(st);
@@ -118,7 +132,7 @@ final class MoreSheetController: UITableViewController {
     private var sections: [(title: String?, rows: [Row])] = []
     private let tint: UIColor
 
-    init(state: NavState, tint: UIColor, perform: @escaping (String) -> Void) {
+    init(state: NavState, tint: UIColor, perform: @escaping (String) -> Void, scan: (() -> Void)?) {
         self.tint = tint
         super.init(style: .insetGrouped)
         title = "Thêm"
@@ -129,6 +143,14 @@ final class MoreSheetController: UITableViewController {
             places.append(Row(title: p.name, subtitle: p.isDept ? (p.locked ? "Chỉ thành viên phòng xem được kênh" : nil) : "Toàn công ty",
                               symbol: p.isDept ? nil : "building.2", indent: p.isDept ? 1 : 0, checked: p.on, dim: p.locked, destructive: false,
                               run: { if !p.on { perform("__bexNav.click(\(p.index))") } }))
+        }
+        if let j = state.joinIndex {
+            places.append(Row(title: "Tham gia hoặc tạo công ty", subtitle: "Dán link mời của công ty", symbol: "plus.circle", indent: 0, checked: false,
+                              dim: false, destructive: false, run: { perform("__bexNav.click(\(j))") }))
+        }
+        if let scan {
+            places.append(Row(title: "Quét mã QR mời vào công ty", subtitle: nil, symbol: "qrcode.viewfinder", indent: 0, checked: false,
+                              dim: false, destructive: false, run: scan))
         }
         if !places.isEmpty { sections.append(("Công ty và phòng ban", places)) }
 
@@ -245,6 +267,8 @@ extension WebViewController: UITabBarDelegate {
         let idx = NativeTabs.tabs.firstIndex { $0.view == v }
         tabBar.selectedItem = idx.map { items[$0] } ?? (v.isEmpty ? nil : items.last)
         items[0].badgeValue = navState.badge.isEmpty ? nil : navState.badge
+        items[NativeTabs.tabs.count].badgeValue = navState.moreDot ? "" : nil
+        for (i, t) in NativeTabs.tabs.enumerated() { items[i].title = navState.tabLabels[t.view] ?? t.title }
         // chỉ hiện mục nào trang có
         for (i, t) in NativeTabs.tabs.enumerated() { items[i].isEnabled = navState.views.contains { $0.key == t.view } }
     }
@@ -261,9 +285,14 @@ extension WebViewController: UITabBarDelegate {
 
     private func presentMore() {
         guard presentedViewController == nil else { return }
-        let more = MoreSheetController(state: navState, tint: navState.accent ?? Theme.accent) { [weak self] js in
+        #if targetEnvironment(macCatalyst)
+        let scan: (() -> Void)? = nil
+        #else
+        let scan: (() -> Void)? = { [weak self] in self?.scanJoin() }
+        #endif
+        let more = MoreSheetController(state: navState, tint: navState.accent ?? Theme.accent, perform: { [weak self] js in
             self?.web.evaluateJavaScript("window.__bexNav && " + js, completionHandler: nil)
-        }
+        }, scan: scan)
         let nav = UINavigationController(rootViewController: more)
         if let sheet = nav.sheetPresentationController {
             sheet.detents = [.medium(), .large()]

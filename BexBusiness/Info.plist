@@ -8,6 +8,17 @@
 	<array>
 		<string>vi</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>vn.beso.bexbusiness</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>bexbusiness</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>BexBusiness</string>
 	<key>CFBundleExecutable</key>

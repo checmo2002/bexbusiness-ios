@@ -7,6 +7,8 @@ import QuickLook
 final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler,
                                 WKScriptMessageHandlerWithReply, WKDownloadDelegate, QLPreviewControllerDataSource {
     private let base: URL
+    /// trang mở đầu: /app (giao diện làm việc), hoặc /join/<mã> khi mở từ link mời
+    private let startURL: URL
     var web: WKWebView!
     // thanh Tab gốc (NativeTabBar.swift)
     let tabBar = UITabBar()
@@ -16,6 +18,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     var webBottomToTabBar: NSLayoutConstraint!
     private let errorView = UIView()
     private let errorDetail = UILabel()
+    private let errorDefaultButton = UIButton(type: .system)
+    private var retryTimer: Timer?
     private let loadingView = UIActivityIndicatorView(style: .large)
     private var titleObservation: NSKeyValueObservation?
     private var lightTheme = Theme.webLight
@@ -25,8 +29,9 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
     private var previewFile: URL?
     private var loadedOnce = false
 
-    init(base: URL) {
+    init(base: URL, startPath: String? = nil) {
         self.base = base
+        startURL = URL(string: startPath ?? "/app", relativeTo: base)?.absoluteURL ?? base
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -34,6 +39,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     deinit {
         titleObservation?.invalidate()
+        retryTimer?.invalidate()
         NotificationCenter.default.removeObserver(self)
     }
 
@@ -107,7 +113,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         NotificationCenter.default.addObserver(self, selector: #selector(notificationClicked(_:)), name: .bexNotificationClicked, object: nil)
 
         loadingView.startAnimating()
-        web.load(URLRequest(url: base))
+        web.load(URLRequest(url: startURL))
         // xin quyền thông báo + số tin chưa đọc trên biểu tượng app (hỏi khi đã vào máy chủ, không hỏi ngay lúc mở app).
         // Hỏi đủ cả 3 trong một lần: iOS/macOS chỉ hiện hộp hỏi một lần duy nhất.
         UNUserNotificationCenter.current().requestAuthorization(options: [.badge, .alert, .sound]) { _, _ in }
@@ -144,7 +150,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         icon.heightAnchor.constraint(equalToConstant: 48).isActive = true
 
         let title = UILabel()
-        title.text = "Không kết nối được máy chủ"
+        title.text = "Chưa kết nối được BexBusiness"
         title.font = .systemFont(ofSize: 20, weight: .bold)
         title.textColor = Theme.text
         title.textAlignment = .center
@@ -164,19 +170,29 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
         keepCustomLook(retry)
         retry.addTarget(self, action: #selector(retryTapped), for: .touchUpInside)
 
+        // đang dùng máy chủ riêng: cho quay về máy chủ BexBusiness chung
+        let back = errorDefaultButton
+        back.setTitle("Dùng máy chủ BexBusiness", for: .normal)
+        back.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
+        back.backgroundColor = Theme.card
+        back.setTitleColor(Theme.text, for: .normal)
+        back.layer.cornerRadius = 12
+        back.layer.borderWidth = 1
+        back.layer.borderColor = Theme.line.cgColor
+        back.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        keepCustomLook(back)
+        back.addTarget(self, action: #selector(useDefaultServer), for: .touchUpInside)
+        back.isHidden = base.host.map(ServerStore.isDefaultHost) ?? true
+
+        // Nâng cao: máy chủ riêng, chỉ là một dòng chữ nhỏ, không đẩy người dùng vào màn nhập địa chỉ
         let change = UIButton(type: .system)
-        change.setTitle("Đổi máy chủ", for: .normal)
-        change.titleLabel?.font = .systemFont(ofSize: 16, weight: .semibold)
-        change.backgroundColor = Theme.card
-        change.setTitleColor(Theme.text, for: .normal)
-        change.layer.cornerRadius = 12
-        change.layer.borderWidth = 1
-        change.layer.borderColor = Theme.line.cgColor
-        change.heightAnchor.constraint(equalToConstant: 48).isActive = true
+        change.setTitle("Nâng cao: máy chủ riêng của công ty", for: .normal)
+        change.titleLabel?.font = .systemFont(ofSize: 14)
+        change.setTitleColor(Theme.muted, for: .normal)
         keepCustomLook(change)
         change.addTarget(self, action: #selector(changeServer), for: .touchUpInside)
 
-        let stack = UIStackView(arrangedSubviews: [icon, title, errorDetail, retry, change])
+        let stack = UIStackView(arrangedSubviews: [icon, title, errorDetail, retry, back, change])
         stack.axis = .vertical
         stack.spacing = 12
         stack.setCustomSpacing(24, after: errorDetail)
@@ -195,18 +211,69 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     private func showError(_ error: Error) {
         loadingView.stopAnimating()
-        errorDetail.text = "\(base.host ?? base.absoluteString)\n\(error.localizedDescription)\n\nNếu máy chủ dùng địa chỉ trycloudflare.com miễn phí, địa chỉ sẽ đổi mỗi khi máy chủ khởi động lại: quét lại mã QR mới."
+        let isDefault = base.host.map(ServerStore.isDefaultHost) ?? true
+        errorDetail.text = (isDefault ? "Kiểm tra Wi-Fi hoặc 4G/5G của máy." : "Máy chủ riêng: \(base.host ?? base.absoluteString)")
+            + "\n\(error.localizedDescription)\n\nApp tự thử lại sau vài giây."
         errorView.isHidden = false
+        // tự thử lại sau 10 giây khi đang hiện màn lỗi
+        retryTimer?.invalidate()
+        retryTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: false) { [weak self] _ in
+            guard let self, !self.errorView.isHidden, UIApplication.shared.applicationState == .active else { return }
+            self.retryTapped()
+        }
     }
 
     @objc private func retryTapped() {
+        retryTimer?.invalidate()
         errorView.isHidden = true
         loadingView.startAnimating()
-        if web.url == nil || !loadedOnce { web.load(URLRequest(url: base)) } else { web.reload() }
+        if web.url == nil || !loadedOnce { web.load(URLRequest(url: startURL)) } else { web.reload() }
     }
 
     @objc private func changeServer() {
-        AppRouter.show(SetupViewController(prefill: base), from: self)
+        AppRouter.show(SetupViewController(prefill: ServerStore.custom), from: self)
+    }
+
+    @objc private func useDefaultServer() {
+        ServerStore.custom = nil
+        AppRouter.show(WebViewController(base: ServerStore.defaultURL), from: self)
+    }
+
+    /// Mở một đường dẫn của máy chủ đang dùng (vd. /join/<mã> từ link bexbusiness://)
+    func open(path: String) {
+        guard let u = URL(string: path, relativeTo: base)?.absoluteURL else { return }
+        errorView.isHidden = true
+        web.load(URLRequest(url: u))
+    }
+
+    // MARK: - Quét mã QR mời vào công ty (bảng Thêm, hoặc trang gửi {type:'scanJoin'})
+
+    func scanJoin() {
+        guard presentedViewController == nil else { return }
+        let scanner = QRScannerViewController { [weak self] text in
+            guard let self else { return }
+            guard let j = ServerStore.joinLink(text) else {
+                return self.alert("Không phải link mời", "Mã QR này không phải link mời vào công ty. Link mời có dạng bexbusiness.xyz/join/…")
+            }
+            if j.server.host == self.base.host && j.server.port == self.base.port { return self.open(path: j.path) }
+            // link của máy chủ khác máy đang dùng
+            let a = UIAlertController(title: "Link mời của máy chủ khác",
+                                      message: "Link này thuộc \(j.server.host ?? ""). Chuyển app sang máy chủ đó để tham gia?", preferredStyle: .alert)
+            a.addAction(UIAlertAction(title: "Huỷ", style: .cancel))
+            a.addAction(UIAlertAction(title: "Chuyển", style: .default) { _ in
+                ServerStore.custom = j.server
+                AppRouter.show(WebViewController(base: ServerStore.current, startPath: j.path), from: self)
+            })
+            self.present(a, animated: true)
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    private func alert(_ title: String, _ message: String) {
+        let a = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        a.addAction(UIAlertAction(title: "OK", style: .default))
+        present(a, animated: true)
     }
 
     // MARK: - Lệnh menu / phím tắt (khai báo trong AppDelegate.buildMenu)
@@ -215,7 +282,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     @objc func reloadPage() {
         errorView.isHidden = true
-        if web.url == nil || !loadedOnce { web.load(URLRequest(url: base)) } else { web.reload() }
+        if web.url == nil || !loadedOnce { web.load(URLRequest(url: startURL)) } else { web.reload() }
     }
 
     /// App đứng yên như app gốc: không chụm hai ngón / chạm đúp để phóng cả trang, không tự phóng khi gõ chữ.
@@ -239,7 +306,7 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
 
     @objc private func appBecameActive() {
         // iOS có thể đã tắt tiến trình web khi app nằm nền lâu: trang trắng thì tải lại
-        if loadedOnce && web.url == nil { web.load(URLRequest(url: base)) }
+        if loadedOnce && web.url == nil { web.load(URLRequest(url: startURL)) }
     }
 
     // MARK: - Số tin chưa đọc trên biểu tượng app (tiêu đề trang dạng "(3) BexBusiness")
@@ -274,6 +341,8 @@ final class WebViewController: UIViewController, WKNavigationDelegate, WKUIDeleg
             setNeedsStatusBarAppearanceUpdate()
         case "changeServer":
             changeServer()
+        case "scanJoin":
+            scanJoin()
         case "nav":
             navState = NavState(body)
             updateTabBar(syncPage: true)

@@ -74,9 +74,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
         let w = UIWindow(windowScene: windowScene)
         Theme.apply(to: w)
-        w.rootViewController = AppRouter.initialController()
+        let path = connectionOptions.urlContexts.first.flatMap { AppRouter.path(fromAppURL: $0.url) }
+        w.rootViewController = AppRouter.initialController(path: path)
         w.makeKeyAndVisible()
         window = w
+    }
+
+    /// Mở app bằng link bexbusiness://join/<mã> (nút "Mở trong app" trên trang mời)
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        guard let path = URLContexts.first.flatMap({ AppRouter.path(fromAppURL: $0.url) }), let w = window else { return }
+        if let web = w.rootViewController as? WebViewController { web.open(path: path) }
+        else { w.rootViewController = AppRouter.initialController(path: path) }
     }
 }
 
@@ -111,9 +119,40 @@ enum Theme {
 enum ServerStore {
     private static let key = "bex.serverURL"
 
-    static var url: URL? {
-        get { UserDefaults.standard.string(forKey: key).flatMap(URL.init(string:)) }
-        set { UserDefaults.standard.set(newValue?.absoluteString, forKey: key) }
+    /// Máy chủ BexBusiness dùng chung cho mọi doanh nghiệp (từ máy chủ 1.4.2)
+    static let defaultURL = URL(string: "https://bexbusiness.xyz")!
+
+    /// Máy chủ riêng của công ty (mục Nâng cao). nil = dùng máy chủ BexBusiness chung.
+    static var custom: URL? {
+        get {
+            guard let u = UserDefaults.standard.string(forKey: key).flatMap(URL.init(string:)), let host = u.host else { return nil }
+            // địa chỉ tạm trycloudflare.com đã chết khi máy chủ khởi động lại; trùng máy chủ chung thì coi như mặc định
+            if host.hasSuffix("trycloudflare.com") || isDefaultHost(host) { return nil }
+            return u
+        }
+        set {
+            if let n = newValue, let h = n.host, !isDefaultHost(h) { UserDefaults.standard.set(n.absoluteString, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+    }
+
+    static var current: URL { custom ?? defaultURL }
+
+    static func isDefaultHost(_ host: String) -> Bool {
+        let h = host.lowercased()
+        return h == defaultURL.host || h == "www." + (defaultURL.host ?? "")
+    }
+
+    /// Link mời vào công ty: https://<máy chủ>/join/<mã> → (gốc máy chủ, đường dẫn /join/<mã>)
+    static func joinLink(_ raw: String) -> (server: URL, path: String)? {
+        guard let u = URL(string: raw.trimmingCharacters(in: .whitespacesAndNewlines)), let host = u.host,
+              ["http", "https"].contains(u.scheme?.lowercased() ?? ""), u.path.hasPrefix("/join/"), u.path.count > 6 else { return nil }
+        var o = URLComponents()
+        o.scheme = u.scheme?.lowercased()
+        o.host = isDefaultHost(host) ? defaultURL.host : host
+        o.port = u.port
+        guard let server = o.url else { return nil }
+        return (server, u.path)
     }
 
     /// Chuẩn hoá chữ người dùng nhập / mã QR thành gốc máy chủ: https://ten-may-chu[:cổng]
@@ -156,9 +195,16 @@ enum ServerStore {
 
 // MARK: - Chuyển màn hình gốc
 enum AppRouter {
-    static func initialController() -> UIViewController {
-        if let u = ServerStore.url { return WebViewController(base: u) }
-        return SetupViewController(prefill: nil)
+    /// Mở app là vào thẳng máy chủ (mặc định bexbusiness.xyz), không hỏi máy chủ nữa
+    static func initialController(path: String? = nil) -> UIViewController {
+        WebViewController(base: ServerStore.current, startPath: path)
+    }
+
+    /// bexbusiness://join/<mã> → "/join/<mã>". Chỉ nhận các đường dẫn của app.
+    static func path(fromAppURL url: URL) -> String? {
+        guard url.scheme?.lowercased() == "bexbusiness" else { return nil }
+        let p = "/" + (url.host ?? "") + url.path
+        return (p.hasPrefix("/join/") || p == "/app" || p.hasPrefix("/app/")) ? p : nil
     }
 
     /// Thay màn hình của đúng cửa sổ đang chứa `current` (khi mở nhiều cửa sổ trên iPad/Mac)
